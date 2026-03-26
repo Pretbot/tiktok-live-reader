@@ -6,6 +6,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout del código
         uses: actions/checkout@v4
@@ -16,7 +18,7 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Configurar Node.js
+      - name: Configurar Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22

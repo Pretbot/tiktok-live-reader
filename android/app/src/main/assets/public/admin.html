@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin — TikTok Live Reader</title>
+<link rel="icon" href="data:,">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+  :root {
+    --bg:      #07070d;
+    --surface: #0f0f18;
+    --card:    #14141f;
+    --border:  #1e1e32;
+    --accent:  #fe2c55;
+    --accent2: #69c9d0;
+    --gold:    #f5c842;
+    --text:    #e8e8f0;
+    --muted:   #4a4a60;
+    --glow:    0 0 20px rgba(254,44,85,.4);
+    --glow2:   0 0 16px rgba(105,201,208,.3);
+    --glow-g:  0 0 16px rgba(245,200,66,.3);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Syne', sans-serif; min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; overflow-x: hidden;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 10% 20%, rgba(254,44,85,.07) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 50% at 90% 80%, rgba(105,201,208,.06) 0%, transparent 70%);
+  }
+
+  .icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+  /* ── Login ─────────────────────────────────────────────────────────────── */
+  #login-screen {
+    position: fixed; inset: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg);
+  }
+  .login-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 2.5rem 2rem; width: 340px;
+    display: flex; flex-direction: column; gap: 1.5rem;
+    box-shadow: 0 0 60px rgba(0,0,0,.6);
+    animation: fadeUp .4s cubic-bezier(.22,1,.36,1);
+  }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
+  .login-title { text-align: center; }
+  .login-title .eyebrow {
+    display: flex; align-items: center; justify-content: center; gap: .4rem;
+    font-family: 'Space Mono', monospace; font-size: .62rem;
+    letter-spacing: .15em; text-transform: uppercase; color: var(--gold); margin-bottom: .5rem;
+  }
+  .login-title h1 {
+    font-size: 1.6rem; font-weight: 800; letter-spacing: -.02em;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .login-title p { font-size: .8rem; color: var(--muted); margin-top: .4rem; }
+
+  .login-field {
+    display: flex; align-items: center; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color .2s;
+  }
+  .login-field:focus-within { border-color: var(--gold); box-shadow: var(--glow-g); }
+  .login-field .field-icon {
+    padding: 0 .9rem; color: var(--gold);
+    border-right: 1px solid var(--border); display: flex; align-items: center;
+  }
+  .login-field input {
+    flex: 1; background: transparent; border: none; outline: none;
+    padding: .85rem .9rem; color: var(--text); font-family: 'Syne', sans-serif; font-size: .95rem;
+  }
+
+  .btn-login {
+    width: 100%; padding: .9rem; border-radius: 10px; border: none;
+    background: var(--gold); color: #000; font-family: 'Syne', sans-serif;
+    font-size: .95rem; font-weight: 800; cursor: pointer; transition: all .2s;
+    display: flex; align-items: center; justify-content: center; gap: .5rem;
+  }
+  .btn-login:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  .btn-login:active { transform: translateY(0); }
+
+  .login-error {
+    display: none; align-items: center; justify-content: center; gap: .4rem;
+    text-align: center; font-size: .78rem; color: var(--accent);
+    font-family: 'Space Mono', monospace;
+    animation: shake .3s ease;
+  }
+  .login-error.show { display: flex; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+
+  /* ── Admin Panel ───────────────────────────────────────────────────────── */
+  #admin-panel { display: none; width: 100%; max-width: 900px; padding: 2rem 1.5rem; z-index: 1; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border);
+  }
+  .logo-area { display: flex; flex-direction: column; gap: .25rem; }
+  .logo-eyebrow {
+    display: flex; align-items: center; gap: .35rem;
+    font-family: 'Space Mono', monospace; font-size: .6rem;
+    letter-spacing: .15em; text-transform: uppercase; color: var(--gold);
+  }
+  .logo {
+    display: flex; align-items: center; gap: .5rem;
+    font-size: 1.5rem; font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .logo span { font-family: 'Space Mono', monospace; font-size: .85em; }
+
+  .header-right { display: flex; align-items: center; gap: 1rem; }
+  .live-badge {
+    display: flex; align-items: center; gap: .45rem;
+    font-family: 'Space Mono', monospace; font-size: .68rem; color: var(--accent2);
+    border: 1px solid rgba(105,201,208,.25); border-radius: 20px; padding: .3rem .75rem;
+  }
+  .live-dot-pulse {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent2); box-shadow: var(--glow2); animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+  .btn-logout {
+    display: flex; align-items: center; gap: .4rem;
+    font-family: 'Space Mono', monospace; font-size: .68rem; background: none;
+    border: 1px solid var(--border); color: var(--muted); padding: .4rem .9rem;
+    border-radius: 6px; cursor: pointer; transition: all .2s; letter-spacing: .05em;
+  }
+  .btn-logout:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* Rooms */
+  .rooms-section { margin-bottom: 1.5rem; }
+  .rooms-title {
+    display: flex; align-items: center; gap: .4rem;
+    font-family: 'Space Mono', monospace; font-size: .62rem;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: .75rem;
+  }
+  .rooms-list { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .room-chip {
+    background: var(--card); border: 1px solid var(--border); border-radius: 20px;
+    padding: .32rem .9rem; font-family: 'Space Mono', monospace; font-size: .68rem;
+    display: flex; align-items: center; gap: .5rem;
+  }
+  .room-chip .rname { color: var(--accent); }
+  .room-chip .rsock { color: var(--muted); }
+  .no-rooms { font-size: .78rem; color: var(--muted); font-family: 'Space Mono', monospace; }
+
+  /* Controls grid */
+  .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; margin-bottom: 1.5rem; }
+  @media (max-width:600px) { .controls-grid { grid-template-columns: 1fr; } }
+
+  .control-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 1.35rem 1.25rem; display: flex; flex-direction: column; gap: 1rem;
+    transition: border-color .25s;
+  }
+  .control-card:hover { border-color: rgba(105,201,208,.18); }
+
+  .card-header { display: flex; align-items: center; gap: .75rem; }
+  .card-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .icon-red    { background: rgba(254,44,85,.12);   color: var(--accent); }
+  .icon-teal   { background: rgba(105,201,208,.12); color: var(--accent2); }
+  .icon-gold   { background: rgba(245,200,66,.12);  color: var(--gold); }
+  .icon-purple { background: rgba(180,100,255,.12); color: #b464ff; }
+
+  .card-title { font-weight: 700; font-size: .9rem; letter-spacing: -.01em; }
+  .card-desc  { font-size: .7rem; color: var(--muted); margin-top: .1rem; font-family: 'Space Mono', monospace; }
+
+  .ctrl-slider { display: flex; flex-direction: column; gap: .45rem; }
+  .ctrl-slider-header { display: flex; justify-content: space-between; align-items: center; }
+  .ctrl-label { display: flex; align-items: center; gap: .35rem; font-size: .72rem; color: var(--muted); font-family: 'Space Mono', monospace; }
+  .ctrl-val { font-family: 'Space Mono', monospace; font-size: .75rem; color: var(--gold); font-weight: 700; min-width: 60px; text-align: right; }
+
+  input[type=range] { width: 100%; -webkit-appearance: none; background: transparent; height: 5px; }
+  input[type=range]::-webkit-slider-runnable-track { background: var(--border); height: 5px; border-radius: 3px; }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--gold); margin-top: -5.5px; cursor: pointer; box-shadow: var(--glow-g); transition: transform .1s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+  .ctrl-number {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: .5rem .75rem; color: var(--text); font-family: 'Space Mono', monospace;
+    font-size: .82rem; width: 100%; outline: none; transition: border-color .2s;
+  }
+  .ctrl-number:focus { border-color: var(--gold); box-shadow: var(--glow-g); }
+
+  /* Panel de sonidos */
+  .sound-panel {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 1.35rem 1.25rem; margin-bottom: 1.2rem;
+  }
+  .sound-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: .6rem;
+    margin-top: .9rem;
+  }
+  .btn-sound {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .35rem;
+    padding: .75rem .5rem; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); cursor: pointer;
+    font-family: 'Syne', sans-serif; font-size: .72rem; font-weight: 700;
+    transition: all .18s; text-align: center; line-height: 1.3;
+  }
+  .btn-sound:hover { border-color: var(--accent2); color: var(--accent2); transform: translateY(-2px); box-shadow: var(--glow2); }
+  .btn-sound:active { transform: translateY(0); }
+  .btn-sound .s-emoji { font-size: 1.4rem; line-height: 1; }
+
+  /* TTS admin */
+  .tts-panel {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 1.35rem 1.25rem; margin-bottom: 1.2rem; display: flex; flex-direction: column; gap: .9rem;
+  }
+  .tts-field {
+    display: flex; gap: .6rem;
+  }
+  .tts-input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: .7rem .9rem; color: var(--text); font-family: 'Syne', sans-serif;
+    font-size: .88rem; outline: none; transition: border-color .2s;
+  }
+  .tts-input:focus { border-color: var(--gold); box-shadow: var(--glow-g); }
+  .tts-input::placeholder { color: var(--muted); }
+  .btn-tts {
+    padding: .7rem 1.2rem; border-radius: 8px; border: none;
+    background: var(--gold); color: #000; font-family: 'Syne', sans-serif;
+    font-size: .85rem; font-weight: 800; cursor: pointer; transition: all .2s;
+    display: flex; align-items: center; gap: .4rem; white-space: nowrap;
+  }
+  .btn-tts:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+  /* Apodos */
+  .apodo-panel {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 1.35rem 1.25rem; margin-bottom: 1.2rem; display: flex; flex-direction: column; gap: .9rem;
+  }
+  .apodo-form { display: flex; gap: .5rem; }
+  .apodo-input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: .6rem .8rem; color: var(--text); font-family: 'Space Mono', monospace;
+    font-size: .78rem; outline: none; transition: border-color .2s;
+  }
+  .apodo-input:focus { border-color: var(--accent2); box-shadow: var(--glow2); }
+  .apodo-input::placeholder { color: var(--muted); }
+  .btn-apodo {
+    padding: .6rem 1rem; border-radius: 8px; border: none;
+    background: var(--accent2); color: #000; font-family: 'Syne', sans-serif;
+    font-size: .8rem; font-weight: 800; cursor: pointer; transition: all .2s; white-space: nowrap;
+  }
+  .btn-apodo:hover { filter: brightness(1.1); }
+  .apodos-list { display: flex; flex-direction: column; gap: .4rem; }
+  .apodo-item {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: .5rem .8rem;
+  }
+  .apodo-names { display: flex; align-items: center; gap: .5rem; font-size: .8rem; }
+  .apodo-original { font-family: 'Space Mono', monospace; color: var(--muted); }
+  .apodo-arrow { color: var(--border); }
+  .apodo-nick { font-family: 'Space Mono', monospace; color: var(--accent2); font-weight: 700; }
+  .btn-del-apodo {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    padding: .2rem .4rem; border-radius: 4px; transition: color .2s; font-size: .8rem;
+  }
+  .btn-del-apodo:hover { color: var(--accent); }
+  .apodos-empty { font-size: .75rem; color: var(--muted); font-family: 'Space Mono', monospace; text-align: center; padding: .5rem; }
+  .btn-save {
+    width: 100%; padding: 1rem; border-radius: 12px; border: none;
+    background: linear-gradient(135deg, var(--accent), #c0213d);
+    color: #fff; font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 800;
+    cursor: pointer; transition: all .2s; letter-spacing: .02em; box-shadow: var(--glow);
+    display: flex; align-items: center; justify-content: center; gap: .6rem;
+  }
+  .btn-save:hover { filter: brightness(1.1); transform: translateY(-2px); box-shadow: 0 6px 24px rgba(254,44,85,.5); }
+  .btn-save:active { transform: translateY(0); }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--surface); border: 1px solid rgba(105,201,208,.35);
+    color: var(--accent2); font-family: 'Space Mono', monospace; font-size: .78rem;
+    padding: .7rem 1.4rem; border-radius: 10px; box-shadow: var(--glow2);
+    transition: transform .35s cubic-bezier(.22,1,.36,1), opacity .35s;
+    opacity: 0; pointer-events: none; z-index: 200;
+    display: flex; align-items: center; gap: .5rem;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-title">
+      <div class="eyebrow">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        Panel de administración
+      </div>
+      <h1>TTLIVE</h1>
+      <p>Ingresa la contraseña para continuar</p>
+    </div>
+    <div class="login-field">
+      <span class="field-icon">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </span>
+      <input type="password" id="password-input" placeholder="Contraseña admin" autocomplete="current-password" />
+    </div>
+    <div class="login-error" id="login-error">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+      Contraseña incorrecta
+    </div>
+    <button class="btn-login" id="btn-login">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg>
+      Entrar al panel
+    </button>
+  </div>
+</div>
+
+<!-- Admin Panel -->
+<div id="admin-panel">
+  <header>
+    <div class="logo-area">
+      <div class="logo-eyebrow">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        Admin Panel
+      </div>
+      <div class="logo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="-webkit-text-fill-color:initial">
+          <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/>
+          <circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/>
+          <path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"/>
+        </svg>
+        TT<span>LIVE</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="live-badge">
+        <span class="live-dot-pulse"></span>
+        Conectado
+      </div>
+      <button class="btn-logout" id="btn-logout">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+        Salir
+      </button>
+    </div>
+  </header>
+
+  <!-- Rooms activos -->
+  <div class="rooms-section">
+    <p class="rooms-title">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      Rooms activos
+    </p>
+    <div class="rooms-list" id="rooms-list">
+      <span class="no-rooms">Sin usuarios conectados</span>
+    </div>
+  </div>
+
+  <!-- Controles -->
+  <div class="controls-grid">
+
+    <!-- Cola del servidor -->
+    <div class="control-card">
+      <div class="card-header">
+        <div class="card-icon icon-red">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <div>
+          <div class="card-title">Cola del servidor</div>
+          <div class="card-desc">Buffer antes de descartar mensajes</div>
+        </div>
+      </div>
+      <div class="ctrl-slider">
+        <div class="ctrl-slider-header">
+          <span class="ctrl-label">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+            Máximo en cola
+          </span>
+          <span class="ctrl-val" id="val-maxQueue">50</span>
+        </div>
+        <input type="range" id="ctrl-maxQueue" min="1" max="500" step="1" value="50" />
+        <input type="number" class="ctrl-number" id="num-maxQueue" min="1" max="500" value="50" />
+      </div>
+    </div>
+
+    <!-- Límite de palabras -->
+    <div class="control-card">
+      <div class="card-header">
+        <div class="card-icon icon-teal">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
+        </div>
+        <div>
+          <div class="card-title">Límite de palabras TTS</div>
+          <div class="card-desc">0 = sin límite</div>
+        </div>
+      </div>
+      <div class="ctrl-slider">
+        <div class="ctrl-slider-header">
+          <span class="ctrl-label">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></svg>
+            Palabras máx.
+          </span>
+          <span class="ctrl-val" id="val-maxWords">Sin límite</span>
+        </div>
+        <input type="range" id="ctrl-maxWords" min="0" max="100" step="1" value="0" />
+        <input type="number" class="ctrl-number" id="num-maxWords" min="0" max="100" value="0" placeholder="0 = sin límite" />
+      </div>
+    </div>
+
+    <!-- Límite de caracteres -->
+    <div class="control-card">
+      <div class="card-header">
+        <div class="card-icon icon-gold">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="4" x2="20" y2="20"/><polyline points="9.9 4.9 4 4 4.9 9.9"/><polyline points="14.1 19.1 20 20 19.1 14.1"/></svg>
+        </div>
+        <div>
+          <div class="card-title">Límite de caracteres TTS</div>
+          <div class="card-desc">0 = sin límite</div>
+        </div>
+      </div>
+      <div class="ctrl-slider">
+        <div class="ctrl-slider-header">
+          <span class="ctrl-label">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
+            Chars máx.
+          </span>
+          <span class="ctrl-val" id="val-maxChars">Sin límite</span>
+        </div>
+        <input type="range" id="ctrl-maxChars" min="0" max="500" step="5" value="0" />
+        <input type="number" class="ctrl-number" id="num-maxChars" min="0" max="500" value="0" placeholder="0 = sin límite" />
+      </div>
+    </div>
+
+    <!-- Voz -->
+    <div class="control-card">
+      <div class="card-header">
+        <div class="card-icon icon-purple">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        </div>
+        <div>
+          <div class="card-title">Voz TTS</div>
+          <div class="card-desc">Velocidad y tono para todos</div>
+        </div>
+      </div>
+      <div class="ctrl-slider">
+        <div class="ctrl-slider-header">
+          <span class="ctrl-label">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 19 22 12 13 5 13 19"/><polygon points="2 19 11 12 2 5 2 19"/></svg>
+            Velocidad
+          </span>
+          <span class="ctrl-val" id="val-ttsRate">1.1×</span>
+        </div>
+        <input type="range" id="ctrl-ttsRate" min="0.5" max="3.0" step="0.1" value="1.1" />
+      </div>
+      <div class="ctrl-slider">
+        <div class="ctrl-slider-header">
+          <span class="ctrl-label">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            Tono (Pitch)
+          </span>
+          <span class="ctrl-val" id="val-ttsPitch">1.0</span>
+        </div>
+        <input type="range" id="ctrl-ttsPitch" min="0.0" max="2.0" step="0.1" value="1.0" />
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Mensaje TTS del admin -->
+  <div class="tts-panel">
+    <div class="card-header">
+      <div class="card-icon icon-gold">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+      </div>
+      <div>
+        <div class="card-title">Mensaje al live</div>
+        <div class="card-desc">El TTS lo lee con prioridad a todos los viewers</div>
+      </div>
+    </div>
+    <div class="tts-field">
+      <input type="text" class="tts-input" id="admin-tts-input" placeholder="Escribe un mensaje para leer en voz alta..." maxlength="300" />
+      <button class="btn-tts" id="btn-admin-tts">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Enviar
+      </button>
+    </div>
+  </div>
+
+  <!-- Panel de sonidos -->
+  <div class="sound-panel">
+    <div class="card-header">
+      <div class="card-icon icon-teal">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      </div>
+      <div>
+        <div class="card-title">Reacciones de sonido</div>
+        <div class="card-desc">Se reproduce para todos los viewers conectados</div>
+      </div>
+    </div>
+    <div class="sound-grid">
+      <button class="btn-sound" data-sound="aplausos"><span class="s-emoji">👏</span>Aplausos</button>
+      <button class="btn-sound" data-sound="redoble"><span class="s-emoji">🥁</span>Redoble</button>
+      <button class="btn-sound" data-sound="fanfarria"><span class="s-emoji">🎺</span>Fanfarria</button>
+      <button class="btn-sound" data-sound="campana"><span class="s-emoji">🔔</span>Campana</button>
+      <button class="btn-sound" data-sound="risas"><span class="s-emoji">😂</span>Risas</button>
+      <button class="btn-sound" data-sound="fail"><span class="s-emoji">😬</span>Fail / Wah</button>
+      <button class="btn-sound" data-sound="rimshot"><span class="s-emoji">🥁</span>Rimshot</button>
+      <button class="btn-sound" data-sound="suspenso"><span class="s-emoji">😱</span>Suspenso</button>
+      <button class="btn-sound" data-sound="abucheo"><span class="s-emoji">👎</span>Abucheo</button>
+      <button class="btn-sound" data-sound="alerta"><span class="s-emoji">⚡</span>Alerta</button>
+      <button class="btn-sound" data-sound="levelup"><span class="s-emoji">⬆️</span>Level Up</button>
+      <button class="btn-sound" data-sound="moneda"><span class="s-emoji">🪙</span>Moneda</button>
+      <button class="btn-sound" data-sound="gameover"><span class="s-emoji">💀</span>Game Over</button>
+      <button class="btn-sound" data-sound="explosion"><span class="s-emoji">💥</span>Explosión</button>
+      <button class="btn-sound" data-sound="sirena"><span class="s-emoji">🚨</span>Sirena</button>
+    </div>
+  </div>
+
+  <!-- Panel de apodos -->
+  <div class="apodo-panel">
+    <div class="card-header">
+      <div class="card-icon icon-purple">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+      </div>
+      <div>
+        <div class="card-title">Apodos</div>
+        <div class="card-desc">El bot usa el apodo en vez del username de TikTok</div>
+      </div>
+    </div>
+    <div class="apodo-form">
+      <input type="text" class="apodo-input" id="apodo-username" placeholder="username tiktok" maxlength="50" />
+      <input type="text" class="apodo-input" id="apodo-nick" placeholder="apodo" maxlength="30" />
+      <button class="btn-apodo" id="btn-add-apodo">+ Agregar</button>
+    </div>
+    <div class="apodos-list" id="apodos-list">
+      <span class="apodos-empty">Sin apodos configurados</span>
+    </div>
+  </div>
+
+  <button class="btn-save" id="btn-save">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+    Aplicar cambios a todos los usuarios
+  </button>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+  Configuración aplicada a todos los usuarios
+</div>
+
+<script>
+  const socket = io();
+
+  // Login
+  const loginScreen = document.getElementById('login-screen');
+  const adminPanel  = document.getElementById('admin-panel');
+  const pwInput     = document.getElementById('password-input');
+  const loginError  = document.getElementById('login-error');
+
+  function doLogin() {
+    const pw = pwInput.value.trim();
+    if (!pw) return;
+    socket.emit('admin-login', pw);
+  }
+  document.getElementById('btn-login').addEventListener('click', doLogin);
+  pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+  socket.on('admin-auth', ({ ok, config }) => {
+    if (ok) {
+      loginScreen.style.display = 'none';
+      adminPanel.style.display = 'block';
+      if (config) applyConfigToUI(config);
+      socket.emit('admin-get-apodos');
+      fetchRooms();
+      setInterval(fetchRooms, 5000);
+    } else {
+      loginError.classList.add('show');
+      loginError.style.animation = 'none';
+      requestAnimationFrame(() => { loginError.style.animation = ''; });
+      pwInput.value = '';
+      pwInput.focus();
+    }
+  });
+
+  document.getElementById('btn-logout').addEventListener('click', () => location.reload());
+
+  socket.on('admin-config-saved', (cfg) => {
+    applyConfigToUI(cfg);
+    showToast('Configuración aplicada a todos los usuarios');
+  });
+
+  // Sincronizar slider <-> input numérico
+  function linkSlider(sliderId, numberId, valId, fmt) {
+    const slider = document.getElementById(sliderId);
+    const number = numberId ? document.getElementById(numberId) : null;
+    const valEl  = document.getElementById(valId);
+    slider.addEventListener('input', () => {
+      const v = parseFloat(slider.value);
+      if (number) number.value = v;
+      valEl.textContent = fmt(v);
+    });
+    if (number) {
+      number.addEventListener('input', () => {
+        const v = Math.min(Math.max(parseFloat(number.value) || 0, parseFloat(slider.min)), parseFloat(slider.max));
+        slider.value = v;
+        valEl.textContent = fmt(v);
+      });
+    }
+  }
+
+  linkSlider('ctrl-maxQueue', 'num-maxQueue', 'val-maxQueue', v => v);
+  linkSlider('ctrl-maxWords', 'num-maxWords', 'val-maxWords', v => v == 0 ? 'Sin límite' : v + ' palabras');
+  linkSlider('ctrl-maxChars', 'num-maxChars', 'val-maxChars', v => v == 0 ? 'Sin límite' : v + ' chars');
+  linkSlider('ctrl-ttsRate',  null,           'val-ttsRate',  v => parseFloat(v).toFixed(1) + '×');
+  linkSlider('ctrl-ttsPitch', null,           'val-ttsPitch', v => parseFloat(v).toFixed(1));
+
+  function applyConfigToUI(cfg) {
+    const s = (id, v) => { const e = document.getElementById(id); if (e) e.value = v; };
+    const t = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+    s('ctrl-maxQueue', cfg.maxQueue); s('num-maxQueue', cfg.maxQueue); t('val-maxQueue', cfg.maxQueue);
+    s('ctrl-maxWords', cfg.maxWords); s('num-maxWords', cfg.maxWords); t('val-maxWords', cfg.maxWords == 0 ? 'Sin límite' : cfg.maxWords + ' palabras');
+    s('ctrl-maxChars', cfg.maxChars); s('num-maxChars', cfg.maxChars); t('val-maxChars', cfg.maxChars == 0 ? 'Sin límite' : cfg.maxChars + ' chars');
+    s('ctrl-ttsRate',  cfg.ttsRate);  t('val-ttsRate',  parseFloat(cfg.ttsRate).toFixed(1) + '×');
+    s('ctrl-ttsPitch', cfg.ttsPitch); t('val-ttsPitch', parseFloat(cfg.ttsPitch).toFixed(1));
+  }
+
+  document.getElementById('btn-save').addEventListener('click', () => {
+    socket.emit('admin-set-config', {
+      maxQueue: parseFloat(document.getElementById('ctrl-maxQueue').value),
+      maxWords: parseFloat(document.getElementById('ctrl-maxWords').value),
+      maxChars: parseFloat(document.getElementById('ctrl-maxChars').value),
+      ttsRate:  parseFloat(document.getElementById('ctrl-ttsRate').value),
+      ttsPitch: parseFloat(document.getElementById('ctrl-ttsPitch').value),
+    });
+  });
+
+  // ── Botones de sonido ─────────────────────────────────────────────────────
+  document.querySelectorAll('.btn-sound').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.sound;
+      socket.emit('admin-play-sound', id);
+      // feedback visual rápido
+      btn.style.borderColor = 'var(--accent2)';
+      btn.style.color = 'var(--accent2)';
+      setTimeout(() => { btn.style.borderColor = ''; btn.style.color = ''; }, 500);
+    });
+  });
+
+  // ── TTS del admin ─────────────────────────────────────────────────────────
+  function sendAdminTTS() {
+    const input = document.getElementById('admin-tts-input');
+    const texto = input.value.trim();
+    if (!texto) return;
+    socket.emit('admin-tts', texto);
+    input.value = '';
+    showToast('Mensaje enviado al live');
+  }
+  document.getElementById('btn-admin-tts').addEventListener('click', sendAdminTTS);
+  document.getElementById('admin-tts-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendAdminTTS();
+  });
+
+  async function fetchRooms() {
+    try {
+      const data = await (await fetch('/health')).json();
+      const list = document.getElementById('rooms-list');
+      if (!data.rooms?.length) {
+        list.innerHTML = '<span class="no-rooms">Sin usuarios conectados</span>';
+        return;
+      }
+      list.innerHTML = data.rooms.map(r =>
+        `<div class="room-chip">
+          <span class="rname">@${r.username}</span>
+          <span class="rsock">· ${r.sockets} socket${r.sockets !== 1 ? 's' : ''} · cola: ${r.queueLength}</span>
+        </div>`
+      ).join('');
+    } catch (_) {}
+  }
+
+  // ── Apodos ────────────────────────────────────────────────────────────────
+  socket.on('admin-apodos-update', (apodos) => renderApodos(apodos));
+
+  function renderApodos(apodos) {
+    const list = document.getElementById('apodos-list');
+    const entries = Object.entries(apodos);
+    if (!entries.length) {
+      list.innerHTML = '<span class="apodos-empty">Sin apodos configurados</span>';
+      return;
+    }
+    list.innerHTML = entries.map(([user, nick]) => `
+      <div class="apodo-item">
+        <div class="apodo-names">
+          <span class="apodo-original">@${esc(user)}</span>
+          <span class="apodo-arrow">→</span>
+          <span class="apodo-nick">${esc(nick)}</span>
+        </div>
+        <button class="btn-del-apodo" data-user="${esc(user)}" title="Eliminar">✕</button>
+      </div>`).join('');
+    list.querySelectorAll('.btn-del-apodo').forEach(btn => {
+      btn.addEventListener('click', () => {
+        socket.emit('admin-set-apodo', { username: btn.dataset.user, apodo: '' });
+      });
+    });
+  }
+
+  document.getElementById('btn-add-apodo').addEventListener('click', () => {
+    const user  = document.getElementById('apodo-username').value.trim().replace(/^@/, '');
+    const apodo = document.getElementById('apodo-nick').value.trim();
+    if (!user || !apodo) return;
+    socket.emit('admin-set-apodo', { username: user, apodo });
+    document.getElementById('apodo-username').value = '';
+    document.getElementById('apodo-nick').value = '';
+  });
+
+  document.getElementById('apodo-nick').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('btn-add-apodo').click();
+  });
+
+  function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    const span = t.querySelector('span') || t;
+    if (msg) t.childNodes[t.childNodes.length - 1].textContent = ' ' + msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+</script>
+</body>
+</html>

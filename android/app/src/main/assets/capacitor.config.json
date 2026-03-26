@@ -1,0 +1,6 @@
+{
+	"appId": "com.example.app",
+	"appName": "tiktok-live-reader",
+	"webDir": "public",
+	"bundledWebRuntime": false
+}

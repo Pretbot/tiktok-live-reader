@@ -1,6 +1,6 @@
 {
-	"appId": "com.example.app",
-	"appName": "tiktok-live-reader",
+	"appId": "com.mibot.app",
+	"appName": "Mi Botr",
 	"webDir": "public",
 	"bundledWebRuntime": false
 }

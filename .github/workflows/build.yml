@@ -2,39 +2,26 @@ name: Build Android APK
 on:
   push:
     branches: [ main ]
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout del código
-        uses: actions/checkout@v4
-
-      - name: Java 21 (Requerido para SDK 35)
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
-
-      - name: Node.js 22
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - name: Instalar y Sincronizar
-        run: |
-          npm install
-          npx cap sync android
-
-      - name: Construir APK con Limpieza
+      - run: npm install
+      - run: npx cap sync android
+      - name: Build APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew clean
-          ./gradlew assembleDebug --no-daemon
-
-      - name: Entregar APK
-        uses: actions/upload-artifact@v4
+          ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
         with:
-          name: MiApp-Resultado-Final
+          name: MiApp-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk

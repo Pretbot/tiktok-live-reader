@@ -1,0 +1,6 @@
+{
+  "appId": "com.mibot.app",
+  "appName": "Mi Botr",
+  "webDir": "public",
+  "bundledWebRuntime": false
+}

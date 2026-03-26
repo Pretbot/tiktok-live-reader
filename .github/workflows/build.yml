@@ -27,11 +27,15 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Configurar permisos de Gradle
+        run: chmod +x android/gradlew
+
       - name: Hacer APK debug
         run: |
           cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME_17_X64 }}
 
       - name: Subir el APK final
         uses: actions/upload-artifact@v4
